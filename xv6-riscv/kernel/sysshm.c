@@ -1,30 +1,6 @@
-// sysshm.c – Shared Memory IPC system calls for xv6
-//
-// Provides three system calls:
-//   shmget(int key, int size)  – Create or look up a shared memory segment.
-//                                Returns a segment id (shmid) >= 0, or -1.
-//   shmattach(int shmid)       – Map segment into the calling process's
-//                                address space.  Returns the virtual address,
-//                                or (void*)-1 on error.
-//   shmdetach(void *addr)      – Unmap the segment from the calling process.
-//                                Returns 0 on success, -1 on error.
-//
-// Design notes:
-//   * A global table of NSHM slots is kept in the kernel.  Each slot holds
-//     the integer key, a reference count, and the physical pages that back
-//     the segment.
-//   * Segments are page-aligned; the requested size is rounded up to the
-//     next page boundary (PGSIZE).
-//   * shmattach() appends the shared region above the current heap of the
-//     calling process (above p->sz) without incrementing p->sz, so that
-//     normal heap allocations (sbrk) do not collide with the shared region.
-//     The virtual address returned to the caller is stored per-process so
-//     that shmdetach() can locate and unmap it.
-//   * Physical pages are allocated once at shmget() time and persist for
-//     the lifetime of the xv6 session (until reboot).  This mirrors the
-//     POSIX model where a segment survives all detaches until it is
-//     explicitly deleted with shmctl(IPC_RMID).  refcnt is tracked for
-//     informational purposes; reaching zero does NOT free the segment.
+// sysshm.c - Shared Memory IPC for xv6
+// Adds three syscalls: shmget, shmattach, shmdetach
+// Lets two processes read/write the same physical memory pages.
 
 #include "types.h"
 #include "riscv.h"
@@ -34,35 +10,27 @@
 #include "spinlock.h"
 #include "proc.h"
 
-// ── per-segment descriptor ────────────────────────────────────────────────────
-
+// One shared memory segment
 struct shmseg {
-  int      used;                    // 1 if slot is allocated
-  int      key;                     // caller-chosen integer key
-  int      npages;                  // number of pages in this segment
-  int      refcnt;                  // number of processes currently attached
-  uint64   pages[SHM_MAXPAGES];    // physical addresses of backing pages
-  struct spinlock lk;               // protects this slot
+  int     used;
+  int     key;
+  int     npages;
+  int     refcnt;
+  uint64  pages[SHM_MAXPAGES];
+  struct spinlock lk;
 };
 
 static struct shmseg segtable[NSHM];
 
-// ── per-process attachment record ─────────────────────────────────────────────
-// Each process can attach at most NSHM segments simultaneously.
-
+// Tracks which segments each process has attached, and at what address
 struct shmattach {
-  int    shmid;   // index into segtable; -1 means unused slot
-  uint64 va;      // virtual address where it was mapped in this process
-  int    npages;  // how many pages were mapped
+  int    shmid;   // -1 means this slot is free
+  uint64 va;
+  int    npages;
 };
 
-// Stored inside struct proc.  We use a parallel array keyed by proc index.
-// To keep proc.h simple we store it here in a static table indexed by pid.
-// Since xv6 has at most NPROC processes the array is small.
 static struct shmattach attachtable[NPROC][NSHM];
 static struct spinlock  attachtable_lk;
-
-// ── boot-time initialisation ──────────────────────────────────────────────────
 
 void
 shminit(void)
@@ -78,24 +46,18 @@ shminit(void)
       attachtable[p][s].shmid = -1;
 }
 
-// ── helper: find slot index for a pid ─────────────────────────────────────────
-
+// Maps pid -> index in attachtable (pids start at 1)
 static int
 pidslot(int pid)
 {
-  // xv6 pids start at 1; use pid-1 as index (capped at NPROC-1)
   int idx = pid - 1;
   if (idx < 0 || idx >= NPROC)
     return -1;
   return idx;
 }
 
-// ── sys_shmget ────────────────────────────────────────────────────────────────
-// int shmget(int key, int size)
-// Creates a new shared segment with the given key and size (bytes), or
-// returns the id of an existing segment with the same key.
-// Returns shmid >= 0 on success, -1 on failure.
-
+// shmget(key, size) - create a new shared segment or return an existing one
+// with the same key. Returns the segment id on success, -1 on failure.
 uint64
 sys_shmget(void)
 {
@@ -106,11 +68,11 @@ sys_shmget(void)
   if (size <= 0)
     return -1;
 
-  int npages = (size + PGSIZE - 1) / PGSIZE;  // round up
+  int npages = (size + PGSIZE - 1) / PGSIZE;
   if (npages > SHM_MAXPAGES)
     return -1;
 
-  // First pass: look for an existing segment with the same key.
+  // If a segment with this key already exists, just return its id
   for (int i = 0; i < NSHM; i++) {
     acquire(&segtable[i].lk);
     if (segtable[i].used && segtable[i].key == key) {
@@ -121,15 +83,13 @@ sys_shmget(void)
     release(&segtable[i].lk);
   }
 
-  // Second pass: allocate a new slot.
+  // Otherwise allocate a new slot and grab physical pages for it
   for (int i = 0; i < NSHM; i++) {
     acquire(&segtable[i].lk);
     if (!segtable[i].used) {
-      // Allocate physical pages now.
       for (int p = 0; p < npages; p++) {
         char *mem = kalloc();
         if (mem == 0) {
-          // Roll back already-allocated pages.
           for (int q = 0; q < p; q++)
             kfree((void *)segtable[i].pages[q]);
           release(&segtable[i].lk);
@@ -148,16 +108,12 @@ sys_shmget(void)
     release(&segtable[i].lk);
   }
 
-  return -1;  // no free slot
+  return -1;
 }
 
-// ── sys_shmattach ─────────────────────────────────────────────────────────────
-// void *shmattach(int shmid)
-// Maps the shared segment identified by shmid into the calling process's
-// virtual address space.  The region is placed just above p->sz so it does
-// not interfere with the heap.
-// Returns the virtual address on success, or (uint64)-1 on failure.
-
+// shmattach(shmid) - map the shared segment into this process's address space.
+// The region is placed just above the process heap so it doesn't interfere
+// with normal memory. Returns the virtual address, or -1 on failure.
 uint64
 sys_shmattach(void)
 {
@@ -180,21 +136,16 @@ sys_shmattach(void)
   int npages = segtable[shmid].npages;
   release(&segtable[shmid].lk);
 
-  // Choose a virtual address above the current process size, page-aligned.
-  // We skip 1 guard page above p->sz to separate heap from shared region.
+  // Place shared region one guard page above the heap
   uint64 va = PGROUNDUP(p->sz) + PGSIZE;
-
-  // Check all pages fit before TRAPFRAME.
   if (va + (uint64)npages * PGSIZE > TRAPFRAME)
     return (uint64)-1;
 
-  // Map each physical page.
   acquire(&segtable[shmid].lk);
   for (int pg = 0; pg < npages; pg++) {
     uint64 pa = segtable[shmid].pages[pg];
     if (mappages(p->pagetable, va + (uint64)pg * PGSIZE,
                  PGSIZE, pa, PTE_R | PTE_W | PTE_U) != 0) {
-      // Unmap what we already mapped (don't free physical pages).
       uvmunmap(p->pagetable, va, pg, 0);
       release(&segtable[shmid].lk);
       return (uint64)-1;
@@ -203,7 +154,7 @@ sys_shmattach(void)
   segtable[shmid].refcnt++;
   release(&segtable[shmid].lk);
 
-  // Record the attachment in the per-process table.
+  // Remember this attachment so we can undo it in shmdetach
   acquire(&attachtable_lk);
   for (int s = 0; s < NSHM; s++) {
     if (attachtable[pslot][s].shmid == -1) {
@@ -218,13 +169,9 @@ sys_shmattach(void)
   return va;
 }
 
-// ── sys_shmdetach ─────────────────────────────────────────────────────────────
-// int shmdetach(void *addr)
-// Unmaps the shared segment that was attached at virtual address addr.
-// The segment's physical pages are NOT freed — the segment persists and
-// can be re-attached by any process that knows its key/shmid.
-// Returns 0 on success, -1 on error.
-
+// shmdetach(addr) - unmap the shared segment that was attached at addr.
+// The physical pages are kept alive so other processes can still attach.
+// Returns 0 on success, -1 on failure.
 uint64
 sys_shmdetach(void)
 {
@@ -236,7 +183,7 @@ sys_shmdetach(void)
   if (pslot < 0)
     return -1;
 
-  // Find the attachment record.
+  // Find the record for this address
   acquire(&attachtable_lk);
   int found = -1;
   for (int s = 0; s < NSHM; s++) {
@@ -254,17 +201,14 @@ sys_shmdetach(void)
   int shmid  = attachtable[pslot][found].shmid;
   int npages = attachtable[pslot][found].npages;
 
-  // Clear the record before releasing the lock so no double-detach.
+  // Clear our record first to prevent a double-detach
   attachtable[pslot][found].shmid = -1;
   attachtable[pslot][found].va    = 0;
   release(&attachtable_lk);
 
-  // Unmap the virtual pages from this process's page table.
-  // Do NOT free the physical pages — the segment persists so other
-  // processes (or this one later) can still attach it.
+  // Remove the mapping from this process's page table (don't free the pages)
   uvmunmap(p->pagetable, addr, npages, 0);
 
-  // Decrement refcount (informational only — zero does NOT destroy segment).
   acquire(&segtable[shmid].lk);
   segtable[shmid].refcnt--;
   release(&segtable[shmid].lk);
