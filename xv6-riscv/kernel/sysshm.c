@@ -20,8 +20,11 @@
 //     normal heap allocations (sbrk) do not collide with the shared region.
 //     The virtual address returned to the caller is stored per-process so
 //     that shmdetach() can locate and unmap it.
-//   * Physical pages are allocated once at shmget() time and freed when the
-//     last process detaches (refcount drops to 0).
+//   * Physical pages are allocated once at shmget() time and persist for
+//     the lifetime of the xv6 session (until reboot).  This mirrors the
+//     POSIX model where a segment survives all detaches until it is
+//     explicitly deleted with shmctl(IPC_RMID).  refcnt is tracked for
+//     informational purposes; reaching zero does NOT free the segment.
 
 #include "types.h"
 #include "riscv.h"
@@ -218,7 +221,8 @@ sys_shmattach(void)
 // ── sys_shmdetach ─────────────────────────────────────────────────────────────
 // int shmdetach(void *addr)
 // Unmaps the shared segment that was attached at virtual address addr.
-// Frees physical pages if this was the last attachment.
+// The segment's physical pages are NOT freed — the segment persists and
+// can be re-attached by any process that knows its key/shmid.
 // Returns 0 on success, -1 on error.
 
 uint64
@@ -255,17 +259,14 @@ sys_shmdetach(void)
   attachtable[pslot][found].va    = 0;
   release(&attachtable_lk);
 
-  // Unmap the virtual pages (do NOT free physical pages yet).
+  // Unmap the virtual pages from this process's page table.
+  // Do NOT free the physical pages — the segment persists so other
+  // processes (or this one later) can still attach it.
   uvmunmap(p->pagetable, addr, npages, 0);
 
-  // Decrement refcount; free physical pages if last user.
+  // Decrement refcount (informational only — zero does NOT destroy segment).
   acquire(&segtable[shmid].lk);
   segtable[shmid].refcnt--;
-  if (segtable[shmid].refcnt == 0) {
-    for (int pg = 0; pg < segtable[shmid].npages; pg++)
-      kfree((void *)segtable[shmid].pages[pg]);
-    segtable[shmid].used = 0;
-  }
   release(&segtable[shmid].lk);
 
   return 0;
