@@ -102,11 +102,25 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_getcwd(void);
+extern uint64 sys_lock_create(void);
+extern uint64 sys_lock_acquire(void);
+extern uint64 sys_lock_release(void);
+extern uint64 sys_lock_destroy(void);
+extern uint64 sys_clone(void);
+extern uint64 sys_join(void);
+
+extern uint64 sys_getprocessinfo(void);
+
+extern uint64 sys_shmget(void);
+extern uint64 sys_shmattach(void);
+extern uint64 sys_shmdetach(void);
 extern uint64 sys_getppid(void);
 extern uint64 sys_ps(void);
 extern uint64 sys_trace(void);
 extern uint64 sys_waitx(void);
 extern uint64 sys_getcount(void);
+
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -132,11 +146,25 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getcwd]      sys_getcwd,
+[SYS_lock_create]  sys_lock_create,
+[SYS_lock_acquire] sys_lock_acquire,
+[SYS_lock_release] sys_lock_release,
+[SYS_lock_destroy] sys_lock_destroy,
+[SYS_clone]        sys_clone,
+[SYS_join]         sys_join,
+
+[SYS_getprocessinfo] sys_getprocessinfo,
+
+[SYS_shmget]       sys_shmget,
+[SYS_shmattach]    sys_shmattach,
+[SYS_shmdetach]    sys_shmdetach,
 [SYS_getppid]  sys_getppid,
 [SYS_ps]       sys_ps,
 [SYS_trace]    sys_trace,
 [SYS_waitx]    sys_waitx,
 [SYS_getcount] sys_getcount,
+
 };
 
 void

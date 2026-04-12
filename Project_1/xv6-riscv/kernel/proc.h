@@ -108,4 +108,5 @@ struct proc {
   uint ctime;
   uint rtime;
   uint etime;               // Process name (debugging)
+  int is_thread;               // 1 if this proc shares address space with parent (thread)
 };

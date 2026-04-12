@@ -26,6 +26,8 @@ OBJS = \
   $K/pipe.o \
   $K/exec.o \
   $K/sysfile.o \
+  $K/syslock.o \
+  $K/sysshm.o \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o
@@ -113,7 +115,7 @@ $U/usys.o : $U/usys.S
 $U/_forktest: $U/forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
 	# in order to be able to max out the proc table.
-	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
+	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o $U/umalloc.o
 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
 
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
@@ -142,14 +144,19 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+	$U/_logstress\
+	$U/_forphan\
 	$U/_testppid\
 	$U/_testps\
 	$U/_testtrace\
 	$U/_testwaitx\
 	$U/_testcount\
-	$U/_logstress\
-	$U/_forphan\
 	$U/_dorphan\
+	$U/_pwd\
+	$U/_locktest\
+	$U/_threadtest\
+	$U/_testprocinfo\
+	$U/_shmtest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
