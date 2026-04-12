@@ -837,12 +837,12 @@ ps(void)
   }
 }
 
-int syscall_count[27];
+int syscall_count[38];  // sized for max syscall number SYS_getcount=37
 
 int
 get_syscall_count(int n)
 {
-  if(n <= 0 || n > 26) return -1;
+  if(n <= 0 || n > 37) return -1;
   return syscall_count[n];
 }
 

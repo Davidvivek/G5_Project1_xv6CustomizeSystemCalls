@@ -6,7 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
-extern int syscall_count[27];
+extern int syscall_count[38];
 
 // Fetch the uint64 at addr from the current process.
 int
