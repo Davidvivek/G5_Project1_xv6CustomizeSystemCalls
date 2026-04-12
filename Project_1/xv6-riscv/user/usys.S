@@ -105,6 +105,31 @@ uptime:
  li a7, SYS_uptime
  ecall
  ret
+.global getppid
+getppid:
+ li a7, SYS_getppid
+ ecall
+ ret
+.global ps
+ps:
+ li a7, SYS_ps
+ ecall
+ ret
+.global trace
+trace:
+ li a7, SYS_trace
+ ecall
+ ret
+.global waitx
+waitx:
+ li a7, SYS_waitx
+ ecall
+ ret
+.global getcount
+getcount:
+ li a7, SYS_getcount
+ ecall
+ ret
 .global getcwd
 getcwd:
  li a7, SYS_getcwd

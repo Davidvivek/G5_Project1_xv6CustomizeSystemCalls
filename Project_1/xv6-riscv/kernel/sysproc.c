@@ -146,3 +146,46 @@ printf("State: %s\n", state_names[p->state]);
 
     return 0;
 }
+
+uint64
+sys_getppid(void)
+{
+  struct proc *p = myproc();
+  acquire(&p->parent->lock);
+  int ppid = p->parent->pid;
+  release(&p->parent->lock);
+  return ppid;
+}
+
+uint64
+sys_ps(void)
+{
+  ps();
+  return 0;
+}
+
+uint64
+sys_trace(void)
+{
+  int mask;
+  argint(0, &mask);
+  myproc()->tracemask = mask;
+  return 0;
+}
+
+uint64
+sys_waitx(void)
+{
+  uint64 addr;
+  uint wtime, rtime;
+  argaddr(0, &addr);
+  return waitx(addr, &wtime, &rtime);
+}
+
+uint64
+sys_getcount(void)
+{
+  int n;
+  argint(0, &n);
+  return get_syscall_count(n);
+}
