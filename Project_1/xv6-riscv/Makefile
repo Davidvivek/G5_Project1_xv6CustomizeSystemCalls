@@ -146,6 +146,11 @@ UPROGS=\
 	$U/_zombie\
 	$U/_logstress\
 	$U/_forphan\
+	$U/_testppid\
+	$U/_testps\
+	$U/_testtrace\
+	$U/_testwaitx\
+	$U/_testcount\
 	$U/_dorphan\
 	$U/_pwd\
 	$U/_locktest\

@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+extern int syscall_count[27];
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -114,6 +115,11 @@ extern uint64 sys_getprocessinfo(void);
 extern uint64 sys_shmget(void);
 extern uint64 sys_shmattach(void);
 extern uint64 sys_shmdetach(void);
+extern uint64 sys_getppid(void);
+extern uint64 sys_ps(void);
+extern uint64 sys_trace(void);
+extern uint64 sys_waitx(void);
+extern uint64 sys_getcount(void);
 
 
 // An array mapping syscall numbers from syscall.h
@@ -153,6 +159,11 @@ static uint64 (*syscalls[])(void) = {
 [SYS_shmget]       sys_shmget,
 [SYS_shmattach]    sys_shmattach,
 [SYS_shmdetach]    sys_shmdetach,
+[SYS_getppid]  sys_getppid,
+[SYS_ps]       sys_ps,
+[SYS_trace]    sys_trace,
+[SYS_waitx]    sys_waitx,
+[SYS_getcount] sys_getcount,
 
 };
 
@@ -166,7 +177,10 @@ syscall(void)
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
+    syscall_count[num]++;
     p->trapframe->a0 = syscalls[num]();
+    if(p->tracemask & (1 << num))
+      printf("%d: syscall %d -> %ld\n", p->pid, num, p->trapframe->a0);
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

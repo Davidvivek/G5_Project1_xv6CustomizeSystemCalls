@@ -34,3 +34,8 @@
 #define SYS_shmattach    31
 #define SYS_shmdetach    32
 
+#define SYS_getppid  33
+#define SYS_ps       34
+#define SYS_trace    35
+#define SYS_waitx    36
+#define SYS_getcount 37

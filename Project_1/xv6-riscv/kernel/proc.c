@@ -124,6 +124,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->ctime = ticks;
+  p->rtime = 0;
+  p->etime = 0;
+  p->tracemask = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -478,6 +482,7 @@ kexit(int status)
   acquire(&p->lock);
 
   p->xstate = status;
+  p->etime = ticks;
   p->state = ZOMBIE;
 
   release(&wait_lock);
@@ -808,5 +813,75 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+void
+ps(void)
+{
+  struct proc *p;
+  static char *states[] = {
+    [UNUSED]   "unused",
+    [USED]     "used  ",
+    [SLEEPING] "sleep ",
+    [RUNNABLE] "runble",
+    [RUNNING]  "run   ",
+    [ZOMBIE]   "zombie"
+  };
+  printf("PID\tSTATE\tNAME\n");
+  for(p = proc; p < &proc[NPROC]; p++){
+    acquire(&p->lock);
+    if(p->state == UNUSED){ release(&p->lock); continue; }
+    printf("%d\t%s\t%s\n", p->pid, states[p->state], p->name);
+    release(&p->lock);
+  }
+}
+
+int syscall_count[27];
+
+int
+get_syscall_count(int n)
+{
+  if(n <= 0 || n > 26) return -1;
+  return syscall_count[n];
+}
+
+int
+waitx(uint64 addr, uint *wtime, uint *rtime)
+{
+  struct proc *np;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+  for(;;){
+    havekids = 0;
+    for(np = proc; np < &proc[NPROC]; np++){
+      if(np->parent != p)
+        continue;
+      acquire(&np->lock);
+      havekids = 1;
+      if(np->state == ZOMBIE){
+        pid = np->pid;
+        *rtime = np->rtime;
+        *wtime = np->etime - np->ctime - np->rtime;
+        if(addr != 0 && copyout(p->pagetable, addr,
+            (char *)&np->xstate, sizeof(np->xstate)) < 0){
+          release(&np->lock);
+          release(&wait_lock);
+          return -1;
+        }
+        freeproc(np);
+        release(&np->lock);
+        release(&wait_lock);
+        return pid;
+      }
+      release(&np->lock);
+    }
+    if(!havekids || killed(p)){
+      release(&wait_lock);
+      return -1;
+    }
+    sleep(p, &wait_lock);
   }
 }
