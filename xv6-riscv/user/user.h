@@ -31,6 +31,7 @@ int lock_release(int);
 int lock_destroy(int);
 int clone(void(*fn)(void*), void *arg, void *stack);
 int join(void);
+int getprocessinfo(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

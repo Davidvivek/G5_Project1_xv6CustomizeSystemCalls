@@ -49,3 +49,4 @@ entry("lock_release");
 entry("lock_destroy");
 entry("clone");
 entry("join");
+entry("getprocessinfo");

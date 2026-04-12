@@ -149,6 +149,7 @@ UPROGS=\
 	$U/_pwd\
 	$U/_locktest\
 	$U/_threadtest\
+        $U/_testprocinfo\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

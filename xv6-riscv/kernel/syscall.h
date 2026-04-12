@@ -27,3 +27,4 @@
 #define SYS_lock_destroy 26
 #define SYS_clone        27
 #define SYS_join         28
+#define SYS_getprocessinfo 29
