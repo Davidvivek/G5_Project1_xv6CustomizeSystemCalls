@@ -16,6 +16,7 @@ int main(){
 		fgets(buffer, sizeof(buffer), stdin); // Taking  Input from user
 
 		buffer[strcspn(buffer, "\n")] = 0; // Removing New Line
+		if(strlen(buffer) == 0) continue;
 		if(strcmp(buffer, "exit") == 0) break; // Exit Condition
 
 		// Spliting the commands 
