@@ -12,7 +12,7 @@ int main(){
 	char *args[25]; // Arguments array --> Stores individual Commands
 
 	while(1){
-		printf("G4_Shell> "); // Custom Shell
+		printf("G5_Shell> "); // Custom Shell
 		fgets(buffer, sizeof(buffer), stdin); // Taking  Input from user
 
 		buffer[strcspn(buffer, "\n")] = 0; // Removing New Line
